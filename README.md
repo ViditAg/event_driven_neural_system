@@ -1,91 +1,182 @@
-# event_driven_neural_system
+# Event-Driven Neural Dynamics for Efficient Edge Inference
 
-This project explores event-driven neural computation inspired by biological neural systems and neuromorphic principles. The goal is to build a sparse, threshold-based neural inference pipeline and evaluate tradeoffs between accuracy and computational efficiency.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-## Project structure
+Explore **event-driven neural computation** inspired by biological and neuromorphic systems. This repository trains a baseline MNIST classifier, applies **threshold-based input sparsity** (compute only where input changes), and measures tradeoffs between **accuracy**, **activity/sparsity**, and **inference time**.
 
-```text
-event_driven_neural_system/
-├── experiments/
-│   ├── data.py
-│   ├── event_driven.py
-│   └── run_experiments.py
-├── models/
-│   └── mlp.py
-├── plots/
-├── results/
-├── tests/
-└── README.md
-```
+> **Scope:** Input-level event masking + a dense scikit-learn MLP. Hidden layers still run dense inference; sparsity is measured on masked pixels. See [Limitations](#limitations) for natural extensions.
 
-## Method
+## License
 
-The event-driven preprocessing path follows the thresholding rule from the project brief:
+This project is released under the **[MIT License](LICENSE)** (Copyright © 2026 Vidit Agrawal). You may use, modify, and distribute the code with attribution and a copy of the license.
 
-```text
-delta = |x_t - x_{t-1}|
-mask = delta > threshold
-x_event = x_t * mask
-```
+## Requirements
 
-The baseline model is an MLP with hidden layers sized to the requested `784 → 256 → 128 → 10` MNIST configuration. The implementation uses `scikit-learn`'s `MLPClassifier`, which infers the `784` input dimension directly from the training data.
+- **Python** 3.10+ (3.11+ recommended)
+- Dependencies listed in [`requirements.txt`](requirements.txt): NumPy, scikit-learn, Matplotlib, pytest
 
-## Setup
+## Quick start
+
+Clone the repository, create a virtual environment (optional but recommended), install dependencies, and run the experiment pipeline from the **repository root**:
 
 ```bash
+git clone https://github.com/ViditAg/event_driven_neural_system.git
+cd event_driven_neural_system
+
+python -m venv .venv
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+
 python -m pip install -r requirements.txt
 ```
 
-## Running the experiments
+### Full MNIST experiment
 
-### Full MNIST run
+Downloads MNIST via OpenML (network required on first run):
 
 ```bash
 python -m experiments.run_experiments --dataset mnist
 ```
 
-This trains the baseline MLP, evaluates the event-driven path across thresholds `0.0, 0.01, 0.05, 0.1, 0.2`, and writes:
-
-- `results/metrics.json`
-- `results/metrics.csv`
-- `plots/accuracy_vs_threshold.png`
-- `plots/sparsity_vs_threshold.png`
-- `plots/accuracy_vs_sparsity.png`
-- `plots/accuracy_vs_activity.png`
+Writes metrics to `results/` and plots to `plots/` (both gitignored except `.gitkeep`).
 
 ### Offline smoke test
 
-The sandbox used for development cannot currently reach OpenML, so an offline verification path is also available:
+Uses sklearn’s built-in 8×8 digits dataset—no download:
 
 ```bash
 python -m experiments.run_experiments --dataset digits --sample-limit 500 --max-iter 5
 ```
 
-This uses the built-in `sklearn` digits dataset to validate the end-to-end training, event masking, metric export, and plotting pipeline without network access.
+### Run tests
 
-## Metrics and phase-transition interpretation
+```bash
+pytest
+```
 
-Each run records:
+## Method
 
-- accuracy
-- activity (`nonzero_elements / total_elements`)
-- sparsity (`1 - activity`)
-- inference time as a compute proxy
+Event-driven preprocessing (per feature, relative to the previous sample in the batch):
 
-The reported regimes align with the intended interpretation:
+```text
+delta   = |x_t - x_{t-1}|
+mask    = delta > threshold
+x_event = x_t * mask
+```
 
-- **Dense**: high activity / high accuracy
-- **Critical**: intermediate thresholds with the best tradeoff
-- **Sparse**: strong thresholding with degraded accuracy
+The classifier is an MLP **784 → 256 → 128 → 10** (MNIST), implemented with `sklearn.neural_network.MLPClassifier`.
 
-## Medium article outline
+## Outputs
 
-1. **Problem**: dense computation wastes work on unchanged inputs.
-2. **Insight**: biological systems respond primarily to meaningful change.
-3. **Method**: threshold-based event masking before inference.
-4. **Results**: accuracy/activity/sparsity tradeoffs across thresholds.
-5. **Conclusion**: efficient AI can emerge from event-driven design.
+| Artifact | Description |
+|----------|-------------|
+| `results/metrics.json` | Full results list (baseline + each threshold) |
+| `results/metrics.csv` | Same data in tabular form |
+| `plots/accuracy_vs_threshold.png` | Accuracy vs event threshold |
+| `plots/sparsity_vs_threshold.png` | Sparsity vs threshold |
+| `plots/accuracy_vs_sparsity.png` | Tradeoff curve (key plot) |
+| `plots/accuracy_vs_activity.png` | Phase-style view: accuracy vs activity |
 
-## Resume bullet
+### Metrics
 
-Designed an event-driven neural network with sparse, threshold-based computation inspired by neural dynamics; analyzed tradeoffs between sparsity and accuracy using benchmarking and ablation studies.
+| Metric | Definition |
+|--------|------------|
+| **accuracy** | Classification accuracy on the test split |
+| **activity** | `nonzero_elements / total_elements` on (masked) inputs |
+| **sparsity** | `1 - activity` |
+| **inference_time** | Wall-clock seconds for `model.predict` (compute proxy) |
+| **regime** | Heuristic label: `dense`, `critical`, or `sparse` |
+
+### Regimes (interpretation)
+
+- **Dense** — high activity, typically highest accuracy (baseline or low threshold)
+- **Critical** — intermediate thresholds; best sparsity vs accuracy tradeoff
+- **Sparse** — strong thresholding; low activity, often lower accuracy
+
+## CLI reference
+
+```bash
+python -m experiments.run_experiments --help
+```
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `--dataset` | `mnist` | `mnist` (OpenML) or `digits` (offline) |
+| `--sample-limit` | none | Cap samples (debug / smoke tests) |
+| `--test-size` | `0.2` | Holdout fraction |
+| `--max-iter` | `20` | MLP training epochs cap |
+| `--random-state` | `42` | Reproducibility seed |
+| `--thresholds` | `0.0 0.01 0.05 0.1 0.2` | Event thresholds to sweep |
+| `--results-dir` | `results` | Metrics output directory |
+| `--plots-dir` | `plots` | Figure output directory |
+
+Example: higher training budget for ~97% MNIST baseline:
+
+```bash
+python -m experiments.run_experiments --dataset mnist --max-iter 50
+```
+
+## Repository layout
+
+```text
+event_driven_neural_system/
+├── models/                 # Classifier definitions
+├── experiments/            # Data loading, event logic, CLI
+├── tests/                  # Unit tests (pytest)
+├── results/                # Generated metrics (gitignored)
+├── plots/                  # Generated figures (gitignored)
+├── requirements.txt
+├── LICENSE                 # MIT
+└── README.md
+```
+
+## Module reference
+
+### `models/`
+
+| File | Role |
+|------|------|
+| [`mlp.py`](models/mlp.py) | Builds the baseline `MLPClassifier` (256→128 hidden, ReLU, Adam). Shared by dense and event-driven evaluation—only **inputs** change at inference time. |
+
+### `experiments/`
+
+| File | Role |
+|------|------|
+| [`data.py`](experiments/data.py) | Loads MNIST (OpenML) or sklearn digits; normalizes features to `[0, 1]`; stratified train/test split; returns a `DatasetBundle`. |
+| [`event_driven.py`](experiments/event_driven.py) | Event mask (`delta > threshold`), batch-wise “previous sample” reference, activity/sparsity metrics, threshold sweep, JSON/CSV export, and Matplotlib plots. |
+| [`run_experiments.py`](experiments/run_experiments.py) | **CLI entry point:** load data → train MLP → evaluate thresholds → save results → plot → print summary. |
+
+### `tests/`
+
+| File | Role |
+|------|------|
+| [`test_event_driven.py`](tests/test_event_driven.py) | Unit tests for masking, activity, and `evaluate_thresholds` with a tiny stub model. |
+| [`conftest.py`](tests/conftest.py) | Adds project root to `sys.path` so `pytest` resolves `experiments` and `models` imports. |
+
+## Development notes
+
+- Run commands from the **repo root** so `python -m experiments.run_experiments` resolves packages correctly.
+- `results/*` and `plots/*` are gitignored; commit figures manually if you want them in the repo (e.g. under `docs/`).
+- First MNIST download can take a minute; subsequent runs use the sklearn/OpenML cache.
+
+## Limitations
+
+- Sparsity is **input-only**; the MLP does not skip multiply-adds for zero pixels.
+- “Previous frame” is the **prior test sample**, not a temporal video stream.
+- Regime labels are **threshold buckets**, not a fitted critical point.
+- Inference time may not drop much with sparsity on CPU + sklearn.
+
+These are intentional simplifications for a reproducible research prototype.
+
+## Citation & attribution
+
+If you use this code in a publication or portfolio, a link to this repository is appreciated. The MIT license applies; see [LICENSE](LICENSE).
+
+## Related writing
+
+Outline for a longer article on dense vs event-driven edge inference:
+
+1. Problem — dense computation on static inputs  
+2. Insight — biological systems respond to change  
+3. Method — threshold masking before inference  
+4. Results — accuracy / activity / sparsity tradeoffs  
+5. Conclusion — event-driven design for efficient AI  

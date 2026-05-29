@@ -1,4 +1,16 @@
-"""CLI entry point for the event-driven neural dynamics experiments."""
+"""CLI entry point for the event-driven neural dynamics experiments.
+
+End-to-end pipeline
+-------------------
+1. Load dataset (MNIST or offline digits)
+2. Train baseline MLP on full training pixels
+3. Evaluate baseline + event-threshold variants on the test split
+4. Write ``results/metrics.{json,csv}`` and plots under ``plots/``
+
+Run from the repository root::
+
+    python -m experiments.run_experiments --dataset mnist
+"""
 
 from __future__ import annotations
 
@@ -9,18 +21,53 @@ from experiments.data import load_dataset
 from experiments.event_driven import evaluate_thresholds, plot_results, save_results
 from models.mlp import build_mlp
 
-
+# Default sweep from the project brief; override with ``--thresholds``.
 DEFAULT_THRESHOLDS = [0.0, 0.01, 0.05, 0.1, 0.2]
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--dataset", choices=["mnist", "digits"], default="mnist")
-    parser.add_argument("--sample-limit", type=int, default=None)
-    parser.add_argument("--test-size", type=float, default=0.2)
-    parser.add_argument("--max-iter", type=int, default=20)
-    parser.add_argument("--random-state", type=int, default=42)
-    parser.add_argument("--thresholds", type=float, nargs="*", default=DEFAULT_THRESHOLDS)
+    """Build the argument parser for ``run_experiments``."""
+    parser = argparse.ArgumentParser(
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument(
+        "--dataset",
+        choices=["mnist", "digits"],
+        default="mnist",
+        help="mnist: OpenML download; digits: offline sklearn smoke test.",
+    )
+    parser.add_argument(
+        "--sample-limit",
+        type=int,
+        default=None,
+        help="Use only the first N samples (debug / fast runs).",
+    )
+    parser.add_argument(
+        "--test-size",
+        type=float,
+        default=0.2,
+        help="Fraction of data for the test split.",
+    )
+    parser.add_argument(
+        "--max-iter",
+        type=int,
+        default=20,
+        help="Maximum MLP training iterations (epochs cap).",
+    )
+    parser.add_argument(
+        "--random-state",
+        type=int,
+        default=42,
+        help="Random seed for split and MLP.",
+    )
+    parser.add_argument(
+        "--thresholds",
+        type=float,
+        nargs="*",
+        default=DEFAULT_THRESHOLDS,
+        help="Event thresholds to evaluate after training.",
+    )
     parser.add_argument(
         "--results-dir",
         type=Path,
@@ -37,7 +84,9 @@ def parse_args() -> argparse.Namespace:
 
 
 def main() -> None:
+    """Execute the full train → evaluate → save → plot workflow."""
     args = parse_args()
+
     dataset = load_dataset(
         args.dataset,
         sample_limit=args.sample_limit,
