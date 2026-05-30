@@ -213,13 +213,29 @@ def save_results(results: list[dict], output_dir: Path) -> None:
         writer.writerows(results)
 
 
-def plot_results(results: list[dict], output_dir: Path) -> None:
+# Matplotlib styling for publication-style tradeoff figures.
+_PLOT_RC = {
+    "font.size": 12,
+    "axes.labelsize": 14,
+    "axes.titlesize": 14,
+    "xtick.labelsize": 12,
+    "ytick.labelsize": 12,
+}
+
+
+def plot_results(
+    results: list[dict],
+    output_dir: Path,
+    *,
+    dataset_name: str | None = None,
+) -> None:
     """Create accuracy / sparsity / activity tradeoff plots.
 
     Skips the baseline row (``threshold is None``) for threshold-axis plots.
     Writes four PNG files under ``output_dir``.
     """
     output_dir.mkdir(parents=True, exist_ok=True)
+    title = dataset_name.replace("_", " ").title() if dataset_name else None
 
     threshold_results = [row for row in results if row["threshold"] is not None]
     thresholds = [row["threshold"] for row in threshold_results]
@@ -227,14 +243,33 @@ def plot_results(results: list[dict], output_dir: Path) -> None:
     sparsities = [row["sparsity"] for row in threshold_results]
     activities = [row["activity"] for row in threshold_results]
 
-    _plot_series(thresholds, accuracies, "Threshold", "Accuracy", output_dir / "accuracy_vs_threshold.png")
-    _plot_series(thresholds, sparsities, "Threshold", "Sparsity", output_dir / "sparsity_vs_threshold.png")
+    _plot_series(
+        thresholds,
+        accuracies,
+        "Threshold",
+        "Accuracy",
+        output_dir / "accuracy_vs_threshold.png",
+        title=title,
+        ylim=(0, 1),
+    )
+    _plot_series(
+        thresholds,
+        sparsities,
+        "Threshold",
+        "Sparsity",
+        output_dir / "sparsity_vs_threshold.png",
+        title=title,
+        ylim=(0, 1),
+    )
     _plot_xy(
         sparsities,
         accuracies,
         "Sparsity",
         "Accuracy",
         output_dir / "accuracy_vs_sparsity.png",
+        title=title,
+        xlim=(0, 1),
+        ylim=(0, 1),
     )
     _plot_xy(
         activities,
@@ -242,7 +277,15 @@ def plot_results(results: list[dict], output_dir: Path) -> None:
         "Activity",
         "Accuracy",
         output_dir / "accuracy_vs_activity.png",
+        title=title,
+        xlim=(0, 1),
+        ylim=(0, 1),
     )
+
+
+def _apply_plot_style() -> None:
+    """Apply shared font sizes for all experiment figures."""
+    plt.rcParams.update(_PLOT_RC)
 
 
 def _plot_series(
@@ -251,14 +294,22 @@ def _plot_series(
     x_label: str,
     y_label: str,
     output_path: Path,
+    *,
+    title: str | None = None,
+    ylim: tuple[float, float] | None = None,
 ) -> None:
     """Save a simple line plot (threshold sweeps)."""
-    plt.figure(figsize=(6, 4))
+    _apply_plot_style()
+    plt.figure(figsize=(7, 5))
     plt.plot(x_values, y_values, marker="o")
     plt.xlabel(x_label)
     plt.ylabel(y_label)
+    if title:
+        plt.title(title)
+    if ylim is not None:
+        plt.ylim(*ylim)
     plt.tight_layout()
-    plt.savefig(output_path)
+    plt.savefig(output_path, dpi=150)
     plt.close()
 
 
@@ -268,13 +319,24 @@ def _plot_xy(
     x_label: str,
     y_label: str,
     output_path: Path,
+    *,
+    title: str | None = None,
+    xlim: tuple[float, float] | None = None,
+    ylim: tuple[float, float] | None = None,
 ) -> None:
     """Save a scatter + line plot (tradeoff curves)."""
-    plt.figure(figsize=(6, 4))
+    _apply_plot_style()
+    plt.figure(figsize=(7, 5))
     plt.scatter(x_values, y_values)
     plt.plot(x_values, y_values)
     plt.xlabel(x_label)
     plt.ylabel(y_label)
+    if title:
+        plt.title(title)
+    if xlim is not None:
+        plt.xlim(*xlim)
+    if ylim is not None:
+        plt.ylim(*ylim)
     plt.tight_layout()
-    plt.savefig(output_path)
+    plt.savefig(output_path, dpi=150)
     plt.close()
