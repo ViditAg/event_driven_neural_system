@@ -22,7 +22,17 @@ from experiments.event_driven import evaluate_thresholds, plot_results, save_res
 from models.mlp import build_mlp
 
 # Default sweep from the project brief; override with ``--thresholds``.
-DEFAULT_THRESHOLDS = [0.0, 0.01, 0.05, 0.1, 0.2]
+DEFAULT_THRESHOLDS = [
+    0.0, 0.01, 0.05, 0.1, 0.15, 0.2, 0.25,
+    0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
+]
+
+
+def _resolve_output_dir(base_dir: Path, dataset_name: str) -> Path:
+    """Place artifacts under ``base_dir/dataset_name`` unless already nested."""
+    if base_dir.name == dataset_name:
+        return base_dir
+    return base_dir / dataset_name
 
 
 def parse_args() -> argparse.Namespace:
@@ -72,13 +82,13 @@ def parse_args() -> argparse.Namespace:
         "--results-dir",
         type=Path,
         default=Path("results"),
-        help="Directory for metrics artifacts.",
+        help="Base directory for metrics (writes to <dir>/<dataset>/).",
     )
     parser.add_argument(
         "--plots-dir",
         type=Path,
         default=Path("plots"),
-        help="Directory for plot artifacts.",
+        help="Base directory for figures (writes to <dir>/<dataset>/).",
     )
     return parser.parse_args()
 
@@ -97,9 +107,12 @@ def main() -> None:
     model = build_mlp(max_iter=args.max_iter, random_state=args.random_state)
     model.fit(dataset.train_x, dataset.train_y)
 
+    results_dir = _resolve_output_dir(args.results_dir, dataset.name)
+    plots_dir = _resolve_output_dir(args.plots_dir, dataset.name)
+
     results = evaluate_thresholds(model, dataset.test_x, dataset.test_y, args.thresholds)
-    save_results(results, args.results_dir)
-    plot_results(results, args.plots_dir)
+    save_results(results, results_dir)
+    plot_results(results, plots_dir, dataset_name=dataset.name)
 
     print(f"Dataset: {dataset.name}")
     print(f"Train samples: {len(dataset.train_x)} | Test samples: {len(dataset.test_x)}")

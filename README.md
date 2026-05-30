@@ -23,29 +23,46 @@ Clone the repository, create a virtual environment (optional but recommended), i
 git clone https://github.com/ViditAg/event_driven_neural_system.git
 cd event_driven_neural_system
 
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 python -m pip install -r requirements.txt
 ```
 
-### Full MNIST experiment
+### Digits experiment (offline, recommended)
 
-Downloads MNIST via OpenML (network required on first run):
+Uses sklearn’s built-in 8×8 digits dataset—no network required:
 
 ```bash
-python -m experiments.run_experiments --dataset mnist
+python -m experiments.run_experiments --dataset digits --max-iter 50
 ```
 
-Writes metrics to `results/` and plots to `plots/` (both gitignored except `.gitkeep`).
+Writes to `results/digits/` and `plots/digits/` (gitignored). Plots use 0–1 axes and a 15-point threshold sweep by default.
 
-### Offline smoke test
-
-Uses sklearn’s built-in 8×8 digits dataset—no download:
+Quick smoke test:
 
 ```bash
 python -m experiments.run_experiments --dataset digits --sample-limit 500 --max-iter 5
 ```
+
+### MNIST experiment
+
+Downloads MNIST via OpenML when reachable (`api.openml.org`):
+
+```bash
+python -m experiments.run_experiments --dataset mnist --max-iter 50
+```
+
+Writes to `results/mnist/` and `plots/mnist/`. If OpenML fails on your network, use digits locally and run full MNIST on a machine with reliable access or a future local `data/mnist/` loader.
+
+### Per-dataset output layout
+
+| Dataset | Metrics | Plots |
+|---------|---------|-------|
+| `digits` | `results/digits/metrics.{json,csv}` | `plots/digits/*.png` |
+| `mnist` | `results/mnist/metrics.{json,csv}` | `plots/mnist/*.png` |
+
+Override the base directories with `--results-dir` and `--plots-dir`; the CLI appends the dataset name automatically unless the path already ends with it (e.g. `results/digits`).
 
 ### Run tests
 
@@ -67,14 +84,16 @@ The classifier is an MLP **784 → 256 → 128 → 10** (MNIST), implemented wit
 
 ## Outputs
 
+Each run produces four figures (y-axis 0–1; tradeoff plots also use x-axis 0–1) plus metrics:
+
 | Artifact | Description |
 |----------|-------------|
-| `results/metrics.json` | Full results list (baseline + each threshold) |
-| `results/metrics.csv` | Same data in tabular form |
-| `plots/accuracy_vs_threshold.png` | Accuracy vs event threshold |
-| `plots/sparsity_vs_threshold.png` | Sparsity vs threshold |
-| `plots/accuracy_vs_sparsity.png` | Tradeoff curve (key plot) |
-| `plots/accuracy_vs_activity.png` | Phase-style view: accuracy vs activity |
+| `results/<dataset>/metrics.json` | Full results list (baseline + each threshold) |
+| `results/<dataset>/metrics.csv` | Same data in tabular form |
+| `plots/<dataset>/accuracy_vs_threshold.png` | Accuracy vs event threshold |
+| `plots/<dataset>/sparsity_vs_threshold.png` | Sparsity vs threshold |
+| `plots/<dataset>/accuracy_vs_sparsity.png` | Tradeoff curve (key plot) |
+| `plots/<dataset>/accuracy_vs_activity.png` | Phase-style view: accuracy vs activity |
 
 ### Metrics
 
@@ -87,6 +106,8 @@ The classifier is an MLP **784 → 256 → 128 → 10** (MNIST), implemented wit
 | **regime** | Heuristic label: `dense`, `critical`, or `sparse` |
 
 ### Regimes (interpretation)
+
+Heuristic labels from threshold buckets in code: **dense** (≤ 0.05), **critical** (≤ 0.2), **sparse** (> 0.2).
 
 - **Dense** — high activity, typically highest accuracy (baseline or low threshold)
 - **Critical** — intermediate thresholds; best sparsity vs accuracy tradeoff
@@ -105,14 +126,15 @@ python -m experiments.run_experiments --help
 | `--test-size` | `0.2` | Holdout fraction |
 | `--max-iter` | `20` | MLP training epochs cap |
 | `--random-state` | `42` | Reproducibility seed |
-| `--thresholds` | `0.0 0.01 0.05 0.1 0.2` | Event thresholds to sweep |
-| `--results-dir` | `results` | Metrics output directory |
-| `--plots-dir` | `plots` | Figure output directory |
+| `--thresholds` | `0.0 … 1.0` (15 values) | Event thresholds to sweep |
+| `--results-dir` | `results` | Metrics base dir → `results/<dataset>/` |
+| `--plots-dir` | `plots` | Figures base dir → `plots/<dataset>/` |
 
-Example: higher training budget for ~97% MNIST baseline:
+Custom threshold sweep:
 
 ```bash
-python -m experiments.run_experiments --dataset mnist --max-iter 50
+python -m experiments.run_experiments --dataset digits \
+  --thresholds 0.0 0.2 0.4 0.6 0.8 1.0
 ```
 
 ## Repository layout
@@ -156,7 +178,8 @@ event_driven_neural_system/
 
 - Run commands from the **repo root** so `python -m experiments.run_experiments` resolves packages correctly.
 - `results/*` and `plots/*` are gitignored; commit figures manually if you want them in the repo (e.g. under `docs/`).
-- First MNIST download can take a minute; subsequent runs use the sklearn/OpenML cache.
+- **MNIST / OpenML:** requires working HTTPS to `api.openml.org`. Clear a broken cache with `rm -rf ~/scikit_learn_data/openml` if downloads fail mid-way.
+- **Roadmap:** local MNIST files under `data/mnist/` (not in repo) for offline full-scale runs on a workstation.
 
 ## Limitations
 

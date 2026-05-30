@@ -222,3 +222,6 @@ __marimo__/
 !/results/.gitkeep
 /plots/*
 !/plots/.gitkeep
+
+# Local MNIST data (large; not committed)
+/data/mnist/
