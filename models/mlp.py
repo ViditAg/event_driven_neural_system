@@ -38,6 +38,5 @@ def build_mlp(max_iter: int = 20, random_state: int = 42) -> MLPClassifier:
         max_iter=max_iter,
         # Stop if validation score does not improve for n_iter_no_change passes.
         early_stopping=True,
-        n_iter_no_change=3,
         random_state=random_state,
     )

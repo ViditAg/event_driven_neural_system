@@ -23,7 +23,7 @@ Clone the repository, create a virtual environment (optional but recommended), i
 git clone https://github.com/ViditAg/event_driven_neural_system.git
 cd event_driven_neural_system
 
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 
 python -m pip install -r requirements.txt
