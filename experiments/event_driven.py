@@ -26,8 +26,8 @@ import numpy as np
 from sklearn.metrics import accuracy_score
 
 # Regime labels are heuristic buckets for reporting, not fitted critical points.
-_REGIME_DENSE_THRESHOLD = 0.01
-_REGIME_CRITICAL_THRESHOLD = 0.1
+_REGIME_DENSE_THRESHOLD = 0.05
+_REGIME_CRITICAL_THRESHOLD = 0.2
 
 
 def compute_event_mask(
