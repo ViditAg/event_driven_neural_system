@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
         "--dataset",
         choices=["mnist", "digits"],
         default="mnist",
-        help="mnist: OpenML download; digits: offline sklearn smoke test.",
+        help="mnist: local IDX files in data/mnist/; digits: offline sklearn.",
     )
     parser.add_argument(
         "--sample-limit",

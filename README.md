@@ -34,7 +34,7 @@ python -m pip install -r requirements.txt
 Uses sklearn’s built-in 8×8 digits dataset—no network required:
 
 ```bash
-python -m experiments.run_experiments --dataset digits --max-iter 50
+python -m experiments.run_experiments --dataset digits --max-iter 100
 ```
 
 Writes to `results/digits/` and `plots/digits/` (gitignored). Plots use 0–1 axes and a 15-point threshold sweep by default.
@@ -45,15 +45,28 @@ Quick smoke test:
 python -m experiments.run_experiments --dataset digits --sample-limit 500 --max-iter 5
 ```
 
-### MNIST experiment
+### MNIST experiment (local, recommended)
 
-Downloads MNIST via OpenML when reachable (`api.openml.org`):
+Full-scale MNIST uses **local IDX files** under `data/mnist/` (~53 MB, gitignored).
+Download once, then run offline:
 
 ```bash
+bash scripts/download_mnist.sh
+
 python -m experiments.run_experiments --dataset mnist --max-iter 50
 ```
 
-Writes to `results/mnist/` and `plots/mnist/`. If OpenML fails on your network, use digits locally and run full MNIST on a machine with reliable access or a future local `data/mnist/` loader.
+Writes to `results/mnist/` and `plots/mnist/`. Training uses the official 60k/10k
+split from the IDX files.
+
+Quick smoke test (still uses local files, but only a small subset):
+
+```bash
+python -m experiments.run_experiments --dataset mnist --sample-limit 500 --max-iter 5
+```
+
+
+See [`data/mnist/README.md`](data/mnist/README.md) for file names and troubleshooting.
 
 ### Per-dataset output layout
 
@@ -113,6 +126,31 @@ Heuristic labels from threshold buckets in code: **dense** (≤ 0.05), **critica
 - **Critical** — intermediate thresholds; best sparsity vs accuracy tradeoff
 - **Sparse** — strong thresholding; low activity, often lower accuracy
 
+### Why MNIST may not show a sharp “phase transition”
+
+Nothing is broken if MNIST curves look gradual rather than a cliff. Your run is
+behaving as the code specifies:
+
+1. **Images are already sparse.** MNIST digits use ~19% non-zero pixels (black
+   background). Event masking only shaves activity from ~0.19 down to ~0.05
+   across thresholds 0–0.9, so tradeoff plots with a 0–1 activity axis look
+   compressed compared to digits (~50% baseline activity).
+
+2. **Reference frame is the previous test sample**, not a temporal video stream.
+   Consecutive MNIST test images are unrelated digits, so pixel deltas stay
+   large and low thresholds still pass most ink pixels through.
+
+3. **Accuracy degrades smoothly.** The MLP was trained on full images; partial
+   zeroing reduces accuracy gradually (e.g. 98% → 92% → 76% over the sweep)
+   rather than collapsing at one critical threshold.
+
+4. **Regime labels are fixed threshold buckets**, not a fitted critical point.
+   A “phase transition” in the physics sense is not expected from this setup.
+
+For a sharper tradeoff narrative in writing, compare against **digits** (denser
+inputs, smaller images) or discuss MNIST as a **robustness** curve: accuracy
+vs how aggressively you gate input changes.
+
 ## CLI reference
 
 ```bash
@@ -121,7 +159,7 @@ python -m experiments.run_experiments --help
 
 | Flag | Default | Description |
 |------|---------|-------------|
-| `--dataset` | `mnist` | `mnist` (OpenML) or `digits` (offline) |
+| `--dataset` | `mnist` | `mnist` (local IDX in `data/mnist/`) or `digits` (offline) |
 | `--sample-limit` | none | Cap samples (debug / smoke tests) |
 | `--test-size` | `0.2` | Holdout fraction |
 | `--max-iter` | `20` | MLP training epochs cap |
@@ -143,7 +181,9 @@ python -m experiments.run_experiments --dataset digits \
 event_driven_neural_system/
 ├── models/                 # Classifier definitions
 ├── experiments/            # Data loading, event logic, CLI
+├── scripts/                # download_mnist.sh (fetch IDX files)
 ├── tests/                  # Unit tests (pytest)
+├── data/mnist/             # Local MNIST IDX files (gitignored; see README there)
 ├── results/                # Generated metrics (gitignored)
 ├── plots/                  # Generated figures (gitignored)
 ├── requirements.txt
@@ -163,7 +203,7 @@ event_driven_neural_system/
 
 | File | Role |
 |------|------|
-| [`data.py`](experiments/data.py) | Loads MNIST (OpenML) or sklearn digits; normalizes features to `[0, 1]`; stratified train/test split; returns a `DatasetBundle`. |
+| [`data.py`](experiments/data.py) | Loads MNIST from local IDX files in `data/mnist/`; sklearn digits; normalizes to `[0, 1]`; returns a `DatasetBundle`. |
 | [`event_driven.py`](experiments/event_driven.py) | Event mask (`delta > threshold`), batch-wise “previous sample” reference, activity/sparsity metrics, threshold sweep, JSON/CSV export, and Matplotlib plots. |
 | [`run_experiments.py`](experiments/run_experiments.py) | **CLI entry point:** load data → train MLP → evaluate thresholds → save results → plot → print summary. |
 
@@ -172,19 +212,21 @@ event_driven_neural_system/
 | File | Role |
 |------|------|
 | [`test_event_driven.py`](tests/test_event_driven.py) | Unit tests for masking, activity, and `evaluate_thresholds` with a tiny stub model. |
+| [`test_data.py`](tests/test_data.py) | Unit tests for MNIST IDX parsing and local file detection. |
 | [`conftest.py`](tests/conftest.py) | Adds project root to `sys.path` so `pytest` resolves `experiments` and `models` imports. |
 
 ## Development notes
 
 - Run commands from the **repo root** so `python -m experiments.run_experiments` resolves packages correctly.
-- `results/*` and `plots/*` are gitignored; commit figures manually if you want them in the repo (e.g. under `docs/`).
-- **MNIST / OpenML:** requires working HTTPS to `api.openml.org`. Clear a broken cache with `rm -rf ~/scikit_learn_data/openml` if downloads fail mid-way.
-- **Roadmap:** local MNIST files under `data/mnist/` (not in repo) for offline full-scale runs on a workstation.
+- `results/*`, `plots/*`, and `data/mnist/*` (except `data/mnist/README.md`) are gitignored.
+- **MNIST:** run `bash scripts/download_mnist.sh` before the first full MNIST experiment.
 
 ## Limitations
 
 - Sparsity is **input-only**; the MLP does not skip multiply-adds for zero pixels.
-- “Previous frame” is the **prior test sample**, not a temporal video stream.
+- “Previous frame” is the **prior test sample**, not a temporal video stream — this
+  limits how much extra sparsity event masking can extract on MNIST (see
+  [Interpreting MNIST results](#why-mnist-may-not-show-a-sharp-phase-transition)).
 - Regime labels are **threshold buckets**, not a fitted critical point.
 - Inference time may not drop much with sparsity on CPU + sklearn.
 
